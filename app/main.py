@@ -40,5 +40,7 @@ async def webhook(request: Request):
 
 @app.post("/review")
 def review_code_diff_endpoint(pullRequest: PullRequestCode):
-    # TODO: Implement 
+    # TODO: Get the diff from the pull request
+    # TODO: Review the diff (using review_code_diff() function)
+    # TODO: Return the review
     return
