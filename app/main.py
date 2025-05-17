@@ -32,6 +32,12 @@ async def review_code_diff(pullRequest: PullRequestCode):
         print(f"Error occurred during processing of message: {e}")
         return {"error": str(e)}
     
+@app.post("/webhook")
+async def webhook(request: Request):
+    data = await request.json()
+    print(data)
+    return {"message": "Webhook received"}
+
 @app.post("/review")
 def review_code_diff_endpoint(pullRequest: PullRequestCode):
     # TODO: Implement 
