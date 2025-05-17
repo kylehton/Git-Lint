@@ -1,0 +1,38 @@
+from fastapi import FastAPI, Request
+from openai import OpenAI
+from pydantic import BaseModel
+import os
+import dotenv
+
+dotenv.load_dotenv()
+
+openAIClient = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+app = FastAPI()
+
+@app.get("/")
+def read_root():
+    return {"message": "Hello, World!"}
+
+class PullRequestCode(BaseModel):
+    diff: str
+
+async def review_code_diff(pullRequest: PullRequestCode):
+    try:
+        response = openAIClient.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "The input are the changes of a pull request. You are a helpful assistant with a deep understanding of algorithms and data structures. You need to review the changes for mistakes and places of improvement. Areas of Focus: Inefficient algorithms, wasted memory/space, lack of abstraction. The end result should be the most syntactically correct, cleanly factored and scalable code. At the end, give a summary of anything you have changed. For all changes, double check your work to make sure nothing is suggested is incorrect."},
+                {"role": "user", "content": pullRequest.diff}
+            ]
+        )
+        print(response.choices[0].message.content)
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"Error occurred during processing of message: {e}")
+        return {"error": str(e)}
+    
+@app.post("/review")
+def review_code_diff_endpoint(pullRequest: PullRequestCode):
+    # TODO: Implement 
+    return
