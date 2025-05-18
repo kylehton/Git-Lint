@@ -9,6 +9,7 @@ dotenv.load_dotenv()
 
 openAIClient = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 githubKey = os.getenv("GITHUB_TOKEN")
+debug = os.getenv("DEBUG") == "true"
 
 app = FastAPI()
 
