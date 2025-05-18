@@ -9,13 +9,13 @@ dotenv.load_dotenv()
 
 openAIClient = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 githubKey = os.getenv("GITHUB_TOKEN")
-debug = os.getenv("DEBUG") == "true"
 
 app = FastAPI()
 
 @app.get("/")
 def read_root():
-    return {"message": "Hello, World!"}
+    print("Service is running successfully through EC2.")
+    return {"Status": "200 OK"}
 
 class PullRequestCode(BaseModel):
     diff: str
@@ -25,7 +25,7 @@ async def review_code_diff(pullRequest: PullRequestCode):
         response = openAIClient.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "The input are the changes of a pull request. You are a helpful assistant with a deep understanding of algorithms and data structures. You need to review the changes for mistakes and places of improvement. Areas of Focus: Inefficient algorithms, wasted memory/space, lack of abstraction. The end result should be the most syntactically correct, cleanly factored and scalable code. At the end, give a summary of anything you have changed. For all changes, double check your work to make sure nothing is suggested is incorrect."},
+                {"role": "system", "content": "The input are the changes of a pull request. You are a helpful assistant with a deep understanding of algorithms and data structures. You need to review the changes for mistakes and places of improvement. Areas of Focus: Inefficient algorithms, wasted memory/space, lack of abstraction. The end result should be the most syntactically correct, cleanly factored and scalable code. At the end, give a summary of anything you have changed. For all changes, double check your work to make sure nothing is suggested is incorrect. Return purely the lines of code that need change, as well as the changes, nothing else."},
                 {"role": "user", "content": pullRequest.diff}
             ]
         )
@@ -35,13 +35,15 @@ async def review_code_diff(pullRequest: PullRequestCode):
         print(f"Error occurred during processing of message: {e}")
         return {"error": str(e)}
 
+
 async def fetch_changes(endpoint: str):
     headers = {
         "Authorization": f"Bearer {githubKey}",
         "Accept": "application/vnd.github.v3+json"
     }
     async with httpx.AsyncClient() as client:
-        response = await client.get(f"https://api.github.com/repos/kylehton/kylehton/pulls/{endpoint}", headers=headers)
+        # TODO: Find endpoint for github api pull requests
+        response = await client.get(f"https://api.github.com/repos/kylehton/pulls/{endpoint}", headers=headers)
         return response.json()
     
     
