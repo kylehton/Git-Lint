@@ -7,3 +7,5 @@ bin/
 pyvenv.cfg
 
 /venv/
+
+example.txt
