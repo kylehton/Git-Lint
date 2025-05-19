@@ -4,7 +4,6 @@ from pydantic import BaseModel
 import os
 import dotenv
 import httpx
-import asyncio
 
 dotenv.load_dotenv()
 
@@ -91,7 +90,7 @@ async def webhook(request: Request):
     data = await request.json()
     print(data["pull_request"]["diff_url"])
 
-    diff = await asyncio.run(get_diff(data["pull_request"]["diff_url"]))
+    diff = await get_diff(data["pull_request"]["diff_url"])
 
     if isinstance(diff, dict) and diff.get("error"):
         return {"message": "Error in getting the diff"}
