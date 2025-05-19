@@ -72,10 +72,10 @@ async def webhook(request: Request):
     print(data["pull_request"]["diff_url"])
     diff = await get_pull_request_diff(data["pull_request"]["diff_url"])
     if diff.get("error"):
-        return {"status": "501 External Server Error", "error": diff.get("error")}
+        return {"message": "Error in getting the diff"}
     else:
         review = await review_code_diff(diff)
         if review.get("error"):
-            return {"status": "500 Internal Server Error", "error": review.get("error")}
+            return {"message": "Error in reviewing the diff"}
         else:
-            return {"status": "200 OK", "response": review}
+            return {"message": "Diff reviewed successfully"}
