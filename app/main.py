@@ -63,7 +63,8 @@ async def review_diff(diff: str):
                 {"role": "user", "content": diff}
             ]
         )
-        print(response.choices[0].message.content)
+        print("Input: ", diff)
+        print("Response: ", response.choices[0].message.content)
         return response.choices[0].message.content
     except Exception as e:
         print(f"Error occurred during processing of message: {e}")
