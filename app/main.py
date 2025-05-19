@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 dotenv.load_dotenv()
 
 openAIClient = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-githubKey = os.getenv("GITHUB_TOKEN")
+githubKey = os.getenv("GITHUB_ACCESS_TOKEN")
 
 systemPrompt = """
     The input is the raw diff of a pull request. You are a meticulous code reviewer with deep expertise in algorithms, 
@@ -49,11 +49,10 @@ async def review_diff(diff: str):
                 {"role": "user", "content": diff}
             ]
         )
-        print("Input: ", diff)
-        print("Response: ", response.choices[0].message.content)
+        logger.info("OpenAI Response: ", response.choices[0].message.content)
         return response.choices[0].message.content
     except Exception as e:
-        print(f"Error occurred during processing of message: {e}")
+        logger.error(f"Error occurred during processing of message: {e}")
         return {"error": str(e)}
     
 
@@ -75,34 +74,14 @@ async def get_diff(url: str):
         response = await client.get(url)
         # Code 200 -> Success, 302 -> Redirect
         if response.status_code == 200 or response.status_code == 302:
-            print("URL Contents: ", response.text)
+            logger.info("URL Contents: ", response.text)
             return response.text
         else:
             return {"error": "Failed to get pull request diff"}
 
-# Test background task function
-async def test_background_task():
-    logger.info("[background] Task started")
-    # Print to both logger and stdout for redundancy
-    print("[background] Task started - print statement")
-    try:
-        await asyncio.sleep(2)
-        logger.info("[background] Task completed")
-        print("[background] Task completed - print statement")
-    except Exception as e:
-        logger.error(f"[background] Task error: {e}")
-        print(f"[background] Task error: {e}")
-
-
-@app.on_event("startup")
-async def startup_event():
-    logger.info("Application starting up...")
-    print("Application starting up... (print statement)")
-
 @app.on_event("shutdown")
 async def shutdown_event():
     logger.info("Application shutting down...")
-    print("Application shutting down... (print statement)")
     
     # Wait for all background tasks to complete
     if background_tasks_set:
@@ -113,53 +92,28 @@ async def shutdown_event():
 @app.get("/")
 def read_root():
     logger.info("Service is running successfully through EC2.")
-    print("Service is running successfully through EC2. (print statement)")
     return {"Status": "200 OK"}
-
-@app.post("/test")
-async def test(background_tasks: BackgroundTasks):
-    logger.info("[/test] Request received")
-    print("[/test] Request received - print statement")
-    
-    background_tasks.add_task(test_background_task)
-    
-    '''
-    task = asyncio.create_task(test_background_task())
-    background_tasks_set.add(task)
-    task.add_done_callback(lambda t: background_tasks_set.remove(t))
-    '''
-    
-    logger.info("[/test] Responding immediately")
-    print("[/test] Responding immediately - print statement")
-    return {"message": "Background task started"}
 
 # Process function for review endpoint
 async def process_review(diff_url: str, issue_url: str):
     try:
         logger.info("[PROCESS]: Retrieving diff from redirect URL")
-        print("[PROCESS]: Retrieving diff from redirect URL - print statement")
         diff = await get_diff(diff_url)
         if isinstance(diff, dict) and diff.get("error"):
             logger.error(f"Error getting diff: {diff['error']}")
-            print(f"Error getting diff: {diff['error']}")
             return
 
         logger.info("[PROCESS]: Reviewing diff and creating comment")
-        print("[PROCESS]: Reviewing diff and creating comment - print statement")
         review = await review_diff(diff)
         if isinstance(review, dict) and review.get("error"):
             logger.error(f"Error reviewing diff: {review['error']}")
-            print(f"Error reviewing diff: {review['error']}")
             return
 
         logger.info("[PROCESS]: Posting comment")
-        print("[PROCESS]: Posting comment - print statement")
         response = await post_comment(issue_url, review)
         logger.info(f"Comment response: {response}")
-        print(f"Comment response: {response}")
     except Exception as e:
         logger.error(f"[ERROR]: {e}")
-        print(f"[ERROR]: {e}")
     
 @app.post("/review")
 async def webhook(request: Request, background_tasks: BackgroundTasks):
