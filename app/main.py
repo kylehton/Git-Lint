@@ -72,9 +72,16 @@ async def review_diff(diff: str):
         print(f"Error occurred during processing of message: {e}")
         return {"error": str(e)}
     
-def comment_review(review: str):
-    # TODO: Comment the review onto the pull request
-    pass
+
+async def post_comment(issue_url: str, comment: str):
+    async with httpx.AsyncClient() as client:
+        response = await client.post(issue_url+"/comments", json={"body": comment}, 
+            headers={
+                "Authorization": f"Bearer {githubKey}",
+                "Accept": "application/vnd.github.v3+json"
+            }
+        )
+        return response.json()
 
 async def get_diff(url: str):
     async with httpx.AsyncClient(follow_redirects=True) as client:
@@ -93,6 +100,7 @@ async def webhook(request: Request):
     print(data["pull_request"]["diff_url"])
 
     diff = await get_diff(data["pull_request"]["diff_url"])
+    issue_url = data["pull_request"]["issue_url"]
 
     if isinstance(diff, dict) and diff.get("error"):
         return {"message": "Error in getting the diff"}
@@ -103,5 +111,7 @@ async def webhook(request: Request):
     if isinstance(review, dict) and review.get("error"):
         return {"message": "Error in reviewing the diff"}
 
-    return {"message": "Diff reviewed successfully", "review": review}
+    await post_comment(issue_url, review)
+
+    return {"message": "Diff was reviewed and commented onto the PR"}
 
