@@ -104,16 +104,19 @@ async def webhook(request: Request):
     issue_url = data["pull_request"]["issue_url"]
 
     async def process():
+        print("PROCESS: Retrieving diff from redirect URL")
         diff = await get_diff(diff_url)
         if isinstance(diff, dict) and diff.get("error"):
             print("Error getting diff:", diff["error"])
             return
 
+        print("PROCESS: Reviewing diff and creating comment")
         review = await review_diff(diff)
         if isinstance(review, dict) and review.get("error"):
             print("Error reviewing diff:", review["error"])
             return
 
+        print("PROCESS: Posting comment")
         response = await post_comment(issue_url, review)
         print("Comment response:", response)
 
