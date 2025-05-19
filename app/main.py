@@ -58,8 +58,8 @@ def comment_review(review: str):
 async def get_diff(url: str):
     async with httpx.AsyncClient() as client:
         response = await client.get(url)
-        if response.status_code == 200:
-            return response.text
+        if response is not None:
+            return {"changes": response}
         else:
             return {"error": "Failed to get pull request diff"}
 
@@ -68,11 +68,15 @@ async def get_diff(url: str):
 async def webhook(request: Request):
     data = await request.json()
     print(data["pull_request"]["diff_url"])
+
     diff = await get_diff(data["pull_request"]["diff_url"])
+
     if isinstance(diff, dict) and diff.get("error"):
         return {"message": "Error in getting the diff"}
-    review = await review_diff(diff)
+
+    review = await review_diff(diff['changes'])
     print(review)
+
     if isinstance(review, dict) and review.get("error"):
         return {"message": "Error in reviewing the diff"}
 
