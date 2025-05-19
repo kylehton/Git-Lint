@@ -63,7 +63,7 @@ async def post_comment(issue_url: str, comment: str):
                 "Accept": "application/vnd.github.v3+json"
             }
         )
-        if response.status_code == 200:
+        if response.status_code == 200 or response.status_code == 201:
             return {"message": "Comment posted successfully"}
         else:
             return {"message": "Failed to post comment"}
