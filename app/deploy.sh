@@ -7,7 +7,7 @@ echo "Rebuilding Docker image"
 docker compose build
 
 echo "Restarting FastAPI container"
-docker compose down
-docker compose up -d
+docker-compose down
+docker-compose up -d --build
 
 echo "✅ Deployed!"
