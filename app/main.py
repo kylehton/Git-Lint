@@ -79,7 +79,7 @@ async def get_diff(url: str):
         response = await client.get(url)
         if response is not None:
             print("Response: ", response)
-            return {"changes": response.body}
+            return {"changes": str(response)}
         else:
             return {"error": "Failed to get pull request diff"}
 
