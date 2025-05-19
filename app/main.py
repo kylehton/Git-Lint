@@ -4,7 +4,7 @@ import os
 import dotenv
 import httpx
 import asyncio
-
+import logging
 dotenv.load_dotenv()
 
 openAIClient = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -34,6 +34,11 @@ app = FastAPI()
 
 # Store background tasks to prevent garbage collection
 background_tasks = set()
+
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 async def review_diff(diff: str):
     try:
