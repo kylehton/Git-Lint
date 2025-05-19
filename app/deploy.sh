@@ -1,12 +1,9 @@
 #!/bin/bash
 
-echo "Pulling changes"
+echo "Pulling Changes from GitHub"
 git pull origin main
 
-echo "Rebuilding Docker image"
-docker compose build
-
-echo "Restarting FastAPI container"
+echo "Rebuilding Docker Image and Restarting FastAPI Container"
 docker-compose down
 docker-compose up -d --build
 
