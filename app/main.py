@@ -96,6 +96,13 @@ async def get_diff(url: str):
         else:
             return {"error": "Failed to get pull request diff"}
 
+@app.post("/test")
+async def webhook(request: Request):
+    async def process():
+        print("✅ Background task running!")
+
+    asyncio.create_task(process())
+    return {"message": "started"}
     
 @app.post("/review")
 async def webhook(request: Request):
