@@ -18,6 +18,8 @@ githubKey = os.getenv("GITHUB_ACCESS_TOKEN")
 systemPrompt = """
     The input is the raw diff of a pull request. You are a meticulous code reviewer with deep expertise in algorithms, 
     data structures, and software engineering best practices.
+    IMPORTANT: Please keep all text, analysis and comments, non-verbose, making sure to be concise and to the point, 
+    especially for non-impactful changes in the diff.
     Your job:
     Identify every single change, no matter how small (e.g., comment removal, spacing, refactoring).
     Some lines are going to be low impact changes, such as spacing, formatting, comment removal, etc.
@@ -116,18 +118,25 @@ async def process_review(diff_url: str, issue_url: str):
 @app.post("/review")
 async def webhook(request: Request, background_tasks: BackgroundTasks):
     logger.info("[/review] Request received")
-    
-    data = await request.json()
-    diff_url = data["pull_request"]["diff_url"]
-    issue_url = data["pull_request"]["issue_url"]
-    
-    background_tasks.add_task(process_review, diff_url, issue_url)
-    
-    '''
-    task = asyncio.create_task(process_review(diff_url, issue_url))
-    background_tasks_set.add(task)
-    task.add_done_callback(lambda t: background_tasks_set.remove(t))
-    '''
-    logger.info("[/review] Responding immediately")
-    
-    return {"message": "Review started, response will be posted shortly."}
+
+    if request.headers.get("X-GitHub-Event") == "ping":
+        logger.info("[/review] Ping received")
+        return {"message": "Ping received!"}
+    elif request.headers.get("X-GitHub-Event") == "pull_request":
+        data = await request.json()
+        diff_url = data["pull_request"]["diff_url"]
+        issue_url = data["pull_request"]["issue_url"]
+        
+        background_tasks.add_task(process_review, diff_url, issue_url)
+        
+        '''
+        task = asyncio.create_task(process_review(diff_url, issue_url))
+        background_tasks_set.add(task)
+        task.add_done_callback(lambda t: background_tasks_set.remove(t))
+        '''
+        logger.info("[/review] Responding immediately")
+        
+        return {"message": "Review started, response will be posted shortly."}
+    else:
+        logger.info("[/review] Unknown event received")
+        return {"message": "Unknown event received"}
