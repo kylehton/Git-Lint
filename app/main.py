@@ -36,7 +36,7 @@ def read_root():
     return {"Status": "200 OK"}
 
 
-async def review_code_diff(diff: str):
+async def review_diff(diff: str):
     try:
         response = openAIClient.chat.completions.create(
             model="gpt-4o-mini",
@@ -55,7 +55,7 @@ def comment_review(review: str):
     # TODO: Comment the review onto the pull request
     pass
 
-async def get_pull_request_diff(url: str):
+async def get_diff(url: str):
     async with httpx.AsyncClient() as client:
         response = await client.get(url)
         if response.status_code == 200:
@@ -68,12 +68,12 @@ async def get_pull_request_diff(url: str):
 async def webhook(request: Request):
     data = await request.json()
     print(data["pull_request"]["diff_url"])
-    diff = await get_pull_request_diff(data["pull_request"]["diff_url"])
-    if diff.get("error"):
+    diff = await get_diff(data["pull_request"]["diff_url"])
+    if isinstance(diff, dict) and diff.get("error"):
         return {"message": "Error in getting the diff"}
-    else:
-        review = await review_code_diff(diff)
-        if review.get("error"):
-            return {"message": "Error in reviewing the diff"}
-        else:
-            return {"message": "Diff reviewed successfully"}
+    review = await review_diff(diff)
+    if isinstance(review, dict) and review.get("error"):
+        return {"message": "Error in reviewing the diff"}
+
+    return {"message": "Diff reviewed successfully", "review": review}
+
