@@ -10,6 +10,24 @@ dotenv.load_dotenv()
 openAIClient = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 githubKey = os.getenv("GITHUB_TOKEN")
 
+systemPrompt = """
+    The input is the raw diff of a pull request. You are a meticulous code reviewer with deep expertise in algorithms, 
+    data structures, and software engineering best practices.
+    Your job:
+    Identify every single change, no matter how small (e.g., comment removal, spacing, refactoring).
+    For each changed line, analyze and explain:
+    What was changed.
+    Why it was changed (or likely changed).
+    Whether the change improves or worsens the code.
+    If further improvements or abstractions can be made (e.g., avoid repetition, wasted memory, lack of modularity).
+    If no code change is necessary, but improvements are possible (e.g., abstraction opportunities), suggest those.
+    Return only the changed lines with explanations — no restating of diffs or unchanged code.
+    Do not return code in diff format. Use a human-readable explanation paired directly with the changed lines.
+    Your review should help turn the code into the most scalable, efficient, and readable version possible. Assume the 
+    author wants direct, precise, and actionable feedback with no fluff. Do not summarize at the start — only provide a 
+    detailed final summary at the end of the changes.
+    """
+
 app = FastAPI()
 
 @app.get("/")
@@ -25,7 +43,7 @@ async def review_code_diff(pullRequest: PullRequestCode):
         response = openAIClient.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "The input are the changes of a pull request. You are a helpful assistant with a deep understanding of algorithms and data structures. You need to review the changes for mistakes and places of improvement. Areas of Focus: Inefficient algorithms, wasted memory/space, lack of abstraction. The end result should be the most syntactically correct, cleanly factored and scalable code. At the end, give a summary of anything you have changed. For all changes, double check your work to make sure nothing is suggested is incorrect. Return purely the lines of code that need change, as well as the changes, nothing else."},
+                {"role": "system", "content": systemPrompt},
                 {"role": "user", "content": pullRequest.diff}
             ]
         )
@@ -34,28 +52,30 @@ async def review_code_diff(pullRequest: PullRequestCode):
     except Exception as e:
         print(f"Error occurred during processing of message: {e}")
         return {"error": str(e)}
+    
+def comment_review(review: str):
+    # TODO: Comment the review onto the pull request
+    pass
 
-
-async def fetch_changes(endpoint: str):
-    headers = {
-        "Authorization": f"Bearer {githubKey}",
-        "Accept": "application/vnd.github.v3+json"
-    }
+async def get_pull_request_diff(url: str):
     async with httpx.AsyncClient() as client:
-        # TODO: Find endpoint for github api pull requests
-        response = await client.get(f"https://api.github.com/repos/kylehton/pulls/{endpoint}", headers=headers)
-        return response.json()
+        response = await client.get(url)
+        if response.status_code == 200:
+            return response.text
+        else:
+            return {"error": "Failed to get pull request diff"}
+
     
-    
-@app.post("/webhook")
+@app.post("/review")
 async def webhook(request: Request):
     data = await request.json()
-    print(data)
-    return {"message": "Webhook received"}
-
-@app.post("/review")
-def review_code_diff_endpoint(pullRequest: PullRequestCode):
-    # TODO: Get the diff from the pull request
-    # TODO: Review the diff (using review_code_diff() function)
-    # TODO: Return the review
-    return
+    print(data["pull_request"]["diff_url"])
+    diff = await get_pull_request_diff(data["pull_request"]["diff_url"])
+    if diff.get("error"):
+        return {"status": "501 External Server Error", "error": diff.get("error")}
+    else:
+        review = await review_code_diff(diff)
+        if review.get("error"):
+            return {"status": "500 Internal Server Error", "error": review.get("error")}
+        else:
+            return {"status": "200 OK", "response": review}
