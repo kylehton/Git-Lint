@@ -35,16 +35,14 @@ def read_root():
     print("Service is running successfully through EC2.")
     return {"Status": "200 OK"}
 
-class PullRequestCode(BaseModel):
-    diff: str
 
-async def review_code_diff(pullRequest: PullRequestCode):
+async def review_code_diff(diff: str):
     try:
         response = openAIClient.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": systemPrompt},
-                {"role": "user", "content": pullRequest.diff}
+                {"role": "user", "content": diff}
             ]
         )
         print(response.choices[0].message.content)
