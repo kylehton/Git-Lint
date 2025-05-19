@@ -15,7 +15,9 @@ systemPrompt = """
     data structures, and software engineering best practices.
     Your job:
     Identify every single change, no matter how small (e.g., comment removal, spacing, refactoring).
-    For each changed line, analyze and explain:
+    Some lines are going to be low impact changes, such as spacing, formatting, comment removal, etc.
+    These should NOT be analyzed heavily, and only briefly mentioned at the bottom of the review, before the summary.
+    For each impactful changed line, analyze and explain:
     What was changed.
     Why it was changed (or likely changed).
     Whether the change improves or worsens the code.
