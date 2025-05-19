@@ -78,8 +78,8 @@ async def get_diff(url: str):
     async with httpx.AsyncClient() as client:
         response = await client.get(url)
         if response is not None:
-            print("Response: ", response)
-            return {"changes": str(response)}
+            print("URL Contents: ", str(response.text))
+            return {"changes": str(response.text)}
         else:
             return {"error": "Failed to get pull request diff"}
 
