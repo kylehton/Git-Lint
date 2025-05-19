@@ -49,7 +49,6 @@ async def review_diff(diff: str):
                 {"role": "user", "content": diff}
             ]
         )
-        logger.info("OpenAI Response: ", response.choices[0].message.content)
         return response.choices[0].message.content
     except Exception as e:
         logger.error(f"Error occurred during processing of message: {e}")
@@ -74,7 +73,6 @@ async def get_diff(url: str):
         response = await client.get(url)
         # Code 200 -> Success, 302 -> Redirect
         if response.status_code == 200 or response.status_code == 302:
-            logger.info("URL Contents: ", response.text)
             return response.text
         else:
             return {"error": "Failed to get pull request diff"}
