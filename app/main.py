@@ -4,6 +4,7 @@ from pydantic import BaseModel
 import os
 import dotenv
 import httpx
+import asyncio
 
 dotenv.load_dotenv()
 
@@ -75,11 +76,12 @@ def comment_review(review: str):
     pass
 
 async def get_diff(url: str):
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(follow_redirects=True) as client:
         response = await client.get(url)
-        if response is not None:
-            print("URL Contents: ", str(response.text))
-            return {"changes": str(response.text)}
+        # Code 200 -> Success, 302 -> Redirect
+        if response.status_code == 200 or response.status_code == 302:
+            print("URL Contents: ", response.text)
+            return response.text
         else:
             return {"error": "Failed to get pull request diff"}
 
@@ -89,12 +91,12 @@ async def webhook(request: Request):
     data = await request.json()
     print(data["pull_request"]["diff_url"])
 
-    diff = await get_diff(data["pull_request"]["diff_url"])
+    diff = await asyncio.run(get_diff(data["pull_request"]["diff_url"]))
 
     if isinstance(diff, dict) and diff.get("error"):
         return {"message": "Error in getting the diff"}
 
-    review = await review_diff(diff['changes'])
+    review = await review_diff(diff)
     print(review)
 
     if isinstance(review, dict) and review.get("error"):
