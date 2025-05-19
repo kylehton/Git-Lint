@@ -64,7 +64,7 @@ async def get_diff(url: str):
             return {"error": "Failed to get pull request diff"}
 
     
-@app.post("/review")
+@app.post("/webhook")
 async def webhook(request: Request):
     data = await request.json()
     print(data["pull_request"]["diff_url"])
