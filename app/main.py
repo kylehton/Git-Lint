@@ -123,9 +123,11 @@ async def test(background_tasks: BackgroundTasks):
     
     background_tasks.add_task(test_background_task)
     
+    '''
     task = asyncio.create_task(test_background_task())
     background_tasks_set.add(task)
     task.add_done_callback(lambda t: background_tasks_set.remove(t))
+    '''
     
     logger.info("[/test] Responding immediately")
     print("[/test] Responding immediately - print statement")
@@ -162,7 +164,6 @@ async def process_review(diff_url: str, issue_url: str):
 @app.post("/review")
 async def webhook(request: Request, background_tasks: BackgroundTasks):
     logger.info("[/review] Request received")
-    print("[/review] Request received - print statement")
     
     data = await request.json()
     diff_url = data["pull_request"]["diff_url"]
@@ -170,11 +171,11 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
     
     background_tasks.add_task(process_review, diff_url, issue_url)
     
+    '''
     task = asyncio.create_task(process_review(diff_url, issue_url))
     background_tasks_set.add(task)
     task.add_done_callback(lambda t: background_tasks_set.remove(t))
-
+    '''
     logger.info("[/review] Responding immediately")
-    print("[/review] Responding immediately - print statement")
     
     return {"message": "Review started, response will be posted shortly."}
