@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, BackgroundTasks
 from openai import OpenAI
 import os
 import dotenv
@@ -32,29 +32,8 @@ systemPrompt = """
 
 app = FastAPI()
 
-systemPrompt = """
-    The input is the raw diff of a pull request. You are a meticulous code reviewer with deep expertise in algorithms, 
-    data structures, and software engineering best practices.
-    Your job:
-    Identify every single change, no matter how small (e.g., comment removal, spacing, refactoring).
-    For each changed line, analyze and explain:
-    What was changed,
-    Why it was changed (or likely changed).
-    Whether the change improves or worsens the code.
-    If further improvements or abstractions can be made (e.g., avoid repetition, wasted memory, lack of modularity).
-    If no code change is necessary, but improvements are possible (e.g., abstraction opportunities), suggest those.
-    Return only the changed lines with explanations — no restating of diffs or unchanged code.
-    Do not return code in diff format. Use a human-readable explanation paired directly with the changed lines.
-    Your review should help turn the code into the most scalable, efficient, and readable version possible. Assume the author 
-    wants direct, precise, and actionable feedback with no fluff. Do not summarize at the start — only provide a detailed 
-    final summary at the end of the changes.
-    """
-
-@app.get("/")
-def read_root():
-    print("Service is running successfully through EC2.")
-    return {"Status": "200 OK"}
-
+# Store background tasks to prevent garbage collection
+background_tasks = set()
 
 async def review_diff(diff: str):
     try:
@@ -96,48 +75,56 @@ async def get_diff(url: str):
         else:
             return {"error": "Failed to get pull request diff"}
 
+# Test background task function
+async def test_background_task():
+    print("[background] Task started")
+    await asyncio.sleep(2)
+    print("[background] Task completed")
+
+@app.get("/")
+def read_root():
+    print("Service is running successfully through EC2.")
+    return {"Status": "200 OK"}
+
 @app.post("/test")
-async def test(request: Request):
+async def test(background_tasks: BackgroundTasks):
     print("[/test] Request received")
-
-    async def background():
-        print("[background] Task started")
-        await asyncio.sleep(2)
-        print("[background] Task completed")
-
-    asyncio.create_task(background())
+    
+    # Using FastAPI's built-in background tasks
+    background_tasks.add_task(test_background_task)
+    
     print("[/test] Responding immediately")
     return {"message": "Background task started"}
 
+# Process function for review endpoint
+async def process_review(diff_url: str, issue_url: str):
+    try:
+        print("[PROCESS]: Retrieving diff from redirect URL")
+        diff = await get_diff(diff_url)
+        if isinstance(diff, dict) and diff.get("error"):
+            print("Error getting diff:", diff["error"])
+            return
+
+        print("[PROCESS]: Reviewing diff and creating comment")
+        review = await review_diff(diff)
+        if isinstance(review, dict) and review.get("error"):
+            print("Error reviewing diff:", review["error"])
+            return
+
+        print("[PROCESS]: Posting comment")
+        response = await post_comment(issue_url, review)
+        print("Comment response:", response)
+    except Exception as e:
+        print("[ERROR]:", e)
     
 @app.post("/review")
-async def webhook(request: Request):
+async def webhook(request: Request, background_tasks: BackgroundTasks):
     data = await request.json()
     diff_url = data["pull_request"]["diff_url"]
     issue_url = data["pull_request"]["issue_url"]
-
-    async def process():
-        try:
-            print("[PROCESS]: Retrieving diff from redirect URL")
-            diff = await get_diff(diff_url)
-            if isinstance(diff, dict) and diff.get("error"):
-                print("Error getting diff:", diff["error"])
-                return
-
-            print("[PROCESS]: Reviewing diff and creating comment")
-            review = await review_diff(diff)
-            if isinstance(review, dict) and review.get("error"):
-                print("Error reviewing diff:", review["error"])
-                return
-
-            print("[PROCESS]: Posting comment")
-            response = await post_comment(issue_url, review)
-            print("Comment response:", response)
-        except Exception as e:
-            print("[ERROR]:", e)
-
-    # Call the background task
-    asyncio.create_task(process())
+    
+    # Using FastAPI's built-in background tasks
+    background_tasks.add_task(process_review, diff_url, issue_url)
 
     # Respond to GitHub immediately
     return {"message": "Review started, response will be posted shortly."}
