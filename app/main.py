@@ -1,9 +1,9 @@
 from fastapi import FastAPI, Request
 from openai import OpenAI
-from pydantic import BaseModel
 import os
 import dotenv
 import httpx
+import asyncio
 
 dotenv.load_dotenv()
 
@@ -17,7 +17,7 @@ systemPrompt = """
     Identify every single change, no matter how small (e.g., comment removal, spacing, refactoring).
     Some lines are going to be low impact changes, such as spacing, formatting, comment removal, etc.
     These should NOT be analyzed heavily, and only briefly mentioned at the bottom of the review, before the summary.
-    For each impactful changed line, analyze and explain:
+    For each impactful changed line, analyze and explain, consolidating analysis where you can, and only mentioning the most impactful changes:
     What was changed.
     Why it was changed (or likely changed).
     Whether the change improves or worsens the code.
@@ -81,7 +81,10 @@ async def post_comment(issue_url: str, comment: str):
                 "Accept": "application/vnd.github.v3+json"
             }
         )
-        return response.json()
+        if response.status_code == 200:
+            return {"message": "Comment posted successfully"}
+        else:
+            return {"message": "Failed to post comment"}
 
 async def get_diff(url: str):
     async with httpx.AsyncClient(follow_redirects=True) as client:
@@ -97,21 +100,25 @@ async def get_diff(url: str):
 @app.post("/review")
 async def webhook(request: Request):
     data = await request.json()
-    print(data["pull_request"]["diff_url"])
-
-    diff = await get_diff(data["pull_request"]["diff_url"])
+    diff_url = data["pull_request"]["diff_url"]
     issue_url = data["pull_request"]["issue_url"]
 
-    if isinstance(diff, dict) and diff.get("error"):
-        return {"message": "Error in getting the diff"}
+    async def process():
+        diff = await get_diff(diff_url)
+        if isinstance(diff, dict) and diff.get("error"):
+            print("Error getting diff:", diff["error"])
+            return
 
-    review = await review_diff(diff)
-    print(review)
+        review = await review_diff(diff)
+        if isinstance(review, dict) and review.get("error"):
+            print("Error reviewing diff:", review["error"])
+            return
 
-    if isinstance(review, dict) and review.get("error"):
-        return {"message": "Error in reviewing the diff"}
+        response = await post_comment(issue_url, review)
+        print("Comment response:", response)
 
-    await post_comment(issue_url, review)
+    # Fire and forget the background task
+    asyncio.create_task(process())
 
-    return {"message": "Diff was reviewed and commented onto the PR"}
-
+    # Respond to GitHub immediately
+    return {"message": "Review started, response will be posted shortly."}
