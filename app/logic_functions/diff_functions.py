@@ -1,6 +1,5 @@
-
-from logic.s3_upload import download_chunk_store_from_s3, load_chunk_store, get_full_chunk_by_id, save_chunk_store_locally, upload_chunk_store_to_s3
-from logic.embeddings import upsert_to_pinecone, hash_content
+from logic_functions.s3_upload import download_chunk_store_from_s3, load_chunk_store, get_full_chunk_by_id, save_chunk_store_locally, upload_chunk_store_to_s3
+from logic_functions.embeddings import upsert_to_pinecone, hash_content
 
 from pinecone import Pinecone
 from openai import OpenAI
