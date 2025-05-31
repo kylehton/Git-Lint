@@ -25,8 +25,8 @@ s3 = boto3.client("s3")
 
 index = pc.Index("git-lint")
 
-store_path = download_chunk_store_from_s3()
-chunk_store = load_chunk_store(store_path)
+# Global variable to store the chunk store
+chunk_store = None
 
 systemPrompt = """
     The input is the raw diff of a pull request. You are a meticulous code reviewer with deep expertise in algorithms, 
@@ -66,32 +66,39 @@ systemPrompt = """
 # @return: None
 async def process_review(repo_name: str, diff_url: str, issue_url: str):
     try:
-        logger.info("[PROCESS]: Retrieving diff from redirect URL")
+        print("[PROCESS]: Downloading chunk store from S3")
+
+        global chunk_store
+        # 0. Download the chunk store from S3
+        store_path = download_chunk_store_from_s3()
+        chunk_store = load_chunk_store(store_path)
+
+        print("[PROCESS]: Retrieving diff from redirect URL")
         # 1. Retrieve the diff from the redirect URL
         diff = await get_diff(diff_url)
         if isinstance(diff, dict) and diff.get("error"):
-            logger.error(f"Error getting diff: {diff['error']}")
+            print(f"Error getting diff: {diff['error']}")
             return
 
-        logger.info("[PROCESS]: Reviewing diff and creating comment")
+        print("[PROCESS]: Reviewing diff and creating comment")
         # 2. Review the diff and create a comment
         review = await review_diff(repo_name, diff)
         if isinstance(review, dict) and review.get("error"):
-            logger.error(f"Error reviewing diff: {review['error']}")
+            print(f"Error reviewing diff: {review['error']}")
             return
 
-        logger.info("[PROCESS]: Posting comment")
+        print("[PROCESS]: Posting comment")
         # 3. Post the comment to the issue
         response = await post_comment(issue_url, review)
-        logger.info(f"Comment response: {response}")
+        print(f"Comment response: {response}")
 
         # 4. Update embeddings for modified files
         if response.get("message") == "Comment posted successfully":
-            logger.info("[PROCESS]: Updating embeddings for modified files")
+            print("[PROCESS]: Updating embeddings for modified files")
             await update_file_embeddings(repo_name, diff)
-            logger.info("[PROCESS]: Successfully updated embeddings")
+            print("[PROCESS]: Successfully updated embeddings")
     except Exception as e:
-        logger.error(f"[ERROR]: {e}")
+        print(f"[ERROR]: {e}")
 
 ### CALLED BY: process_review
 ### PURPOSE: Retrieves the diff from the redirect URL to be used as the input for the review
@@ -104,6 +111,7 @@ async def get_diff(url: str) -> str:
         response = await client.get(url)
         # Code 200 -> Success, 302 -> Redirect
         if response.status_code == 200 or response.status_code == 302:
+            print(f"Diff retrieved successfully: {response.text[:50]}...")
             return response.text
         else:
             return {"error": "Failed to get pull request diff"}
@@ -121,7 +129,7 @@ async def review_diff(repo_name: str, diff: str) -> str:
     try:
         # 1. Retrieve the context from the diff
         context = await retrieve_context_from_diff(repo_name, diff)
-        logger.info(f"Context: {context}")
+        print(f"Context: {context}")
 
         # 2. Call gpt-4o-mini to generate a code review comment
         prompt = f"{systemPrompt}\n\nContext from codebase:\n{context}\n\nDiff:\n{diff}"
@@ -135,7 +143,7 @@ async def review_diff(repo_name: str, diff: str) -> str:
         # 3. Return the code review comment
         return response.choices[0].message.content
     except Exception as e:
-        logger.error(f"Error occurred during processing of message: {e}")
+        print(f"Error occurred during processing of message: {e}")
         return {"error": str(e)}
     
 
@@ -151,6 +159,7 @@ async def review_diff(repo_name: str, diff: str) -> str:
 # @return: str - concatenated string of context from the codebase
 async def retrieve_context_from_diff(repo_name: str, diff: str, top_k: int = 3) -> str:
     try:
+        global chunk_store
         # 1. Retrieve the file paths from the diff
         file_paths = extract_file_paths_from_diff(diff)
 
@@ -182,7 +191,7 @@ async def retrieve_context_from_diff(repo_name: str, diff: str, top_k: int = 3) 
 
                 if full_chunk:
                     # Log the location of the context match
-                    logger.info(f"✅ Context match from {match['metadata']['path']} (chunk {match['metadata']['chunk_id']})")
+                    print(f"✅ Context match from {match['metadata']['path']} (chunk {match['metadata']['chunk_id']})")
                     all_matches.append(full_chunk)
                 else:
                     logger.warning(f"⚠️ Chunk ID {chunk_id} not found in chunk store")
@@ -190,7 +199,7 @@ async def retrieve_context_from_diff(repo_name: str, diff: str, top_k: int = 3) 
         return "\n\n".join(all_matches[:3])
     
     except Exception as e:
-        logger.error(f"Error occurred during retrieval of context from diff: {e}")
+        print(f"Error occurred during retrieval of context from diff: {e}")
         return {"error": str(e)}
 
 
@@ -267,7 +276,7 @@ async def get_file_content(repo_name: str, file_path: str) -> str:
                 logger.warning(f"Failed to get file from {url}: {response.status_code}")
                 return None
     except Exception as e:
-        logger.error(f"Error getting file content: {e}")
+        print(f"Error getting file content: {e}")
         return None
 
 async def update_file_embeddings(repo_name: str, diff: str):
@@ -277,7 +286,7 @@ async def update_file_embeddings(repo_name: str, diff: str):
         # Get modified file paths from diff
         file_paths = extract_file_paths_from_diff(diff)
         if not file_paths:
-            logger.info("No files to update")
+            print("No files to update")
             return
 
         # Track all embedded chunks for saving
@@ -304,9 +313,9 @@ async def update_file_embeddings(repo_name: str, diff: str):
                     # Remove from store
                     for chunk_id in chunks_to_delete:
                         chunk_store.pop(chunk_id, None)
-                    logger.info(f"Deleted {len(chunks_to_delete)} chunks for {file_path}")
+                    print(f"Deleted {len(chunks_to_delete)} chunks for {file_path}")
                 except Exception as e:
-                    logger.error(f"Error deleting chunks for {file_path}: {e}")
+                    print(f"Error deleting chunks for {file_path}: {e}")
 
             # Create chunks from file content
             chunks = []
@@ -351,10 +360,10 @@ async def update_file_embeddings(repo_name: str, diff: str):
                     )
                     chunk["embedding"] = response.data[0].embedding
                     embedded_chunks.append(chunk)
-                    logger.info(f"Embedded: {chunk['metadata']['path']} [chunk {chunk['metadata']['chunk_id']}]")
-                    logger.info(f"Hash: {chunk['metadata']['hash']}")
+                    print(f"Embedded: {chunk['metadata']['path']} [chunk {chunk['metadata']['chunk_id']}]")
+                    print(f"Hash: {chunk['metadata']['hash']}")
                 except Exception as e:
-                    logger.error(f"Error embedding chunk {chunk['id']}: {e}")
+                    print(f"Error embedding chunk {chunk['id']}: {e}")
                     continue
 
             if not embedded_chunks:
@@ -365,7 +374,7 @@ async def update_file_embeddings(repo_name: str, diff: str):
             try:
                 upsert_to_pinecone(embedded_chunks, index)
             except Exception as e:
-                logger.error(f"Error upserting to Pinecone: {e}")
+                print(f"Error upserting to Pinecone: {e}")
                 continue
             
             # Add to our list of all embedded chunks
@@ -380,18 +389,18 @@ async def update_file_embeddings(repo_name: str, diff: str):
                         "chunk_id": chunk["metadata"]["chunk_id"]
                     }
                 except Exception as e:
-                    logger.error(f"Error updating store for chunk {chunk['id']}: {e}")
+                    print(f"Error updating store for chunk {chunk['id']}: {e}")
                     continue
 
         # Save updated store using the same format as embeddings.py
         try:
             save_chunk_store_locally(all_embedded_chunks)
             upload_chunk_store_to_s3()
-            logger.info(f"Successfully updated embeddings for {len(file_paths)} files")
+            print(f"Successfully updated embeddings for {len(file_paths)} files")
         except Exception as e:
-            logger.error(f"Error saving store: {e}")
+            print(f"Error saving store: {e}")
             raise
         
     except Exception as e:
-        logger.error(f"Error updating file embeddings: {e}")
+        print(f"Error updating file embeddings: {e}")
         raise
