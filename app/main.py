@@ -1,23 +1,15 @@
 from logic_functions.diff_functions import process_review
 from fastapi import FastAPI, Request, BackgroundTasks
+from mangum import Mangum
 import asyncio
 import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
 background_tasks_set = set()
 
-### FASTAPI ENDPOINTS ###
-
-@app.lifespan("shutdown")
-async def shutdown_event():
-    logger.info("Application shutting down...")
-    # Wait for all background tasks to complete
-    if background_tasks_set:
-        logger.info(f"Waiting for {len(background_tasks_set)} background tasks to complete")
-        await asyncio.gather(*background_tasks_set, return_exceptions=True)
+app = FastAPI()
 
 @app.get("/")
 def read_root():
@@ -26,7 +18,7 @@ def read_root():
     
 @app.post("/review")
 async def webhook(request: Request, background_tasks: BackgroundTasks): 
-    logger.info("[/review] Request received")
+    print("[/review] Request received")
 
     # Handle ping event from GitHub Webhook
     if request.headers.get("X-GitHub-Event") == "ping":
@@ -41,7 +33,7 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
         
         # Call function chain to process diff and generate a review comment
         background_tasks.add_task(process_review, repo_name, diff_url, issue_url)
-        logger.info("[/review] Responding immediately")
+        print("[/review] Responding immediately")
         
         # Return response to GitHub to confirm receiving Pull Request webhook
         return {"message": "Review started, response will be posted shortly."}
@@ -49,3 +41,5 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
         # Return error message if event is not a ping or pull request
         logger.info("[/review] Unknown event received")
         return {"message": "Unknown event received"}
+    
+handler = Mangum(app)

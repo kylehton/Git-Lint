@@ -8,7 +8,7 @@ from pathlib import Path
 dotenv.load_dotenv()
 
 # const for local chunk storage to be placed in s3 bucket
-CHUNK_STORE_FILE = "chunk_s3.json"
+CHUNK_STORE_FILE = "/tmp/chunk_s3.json"
 S3_BUCKET = os.getenv("S3_BUCKET_NAME")
 S3_OBJECT_KEY = "chunk_s3.json"
 
@@ -28,6 +28,7 @@ def save_chunk_store_locally(chunks):
         for chunk in chunks
     }
 
+    
     with open(CHUNK_STORE_FILE, "w") as f:
         json.dump(store, f, indent=2)
 
