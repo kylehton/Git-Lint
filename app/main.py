@@ -26,7 +26,10 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
         return {"message": "Ping received!"}
     elif request.headers.get("X-GitHub-Event") == "pull_request":
         data = await request.json()
-        full_repo = data["repository"]["full_name"]  
+        if data["merged"] == True:
+            logger.info("[/review] Pull request merged, skipping review")
+            return {"message": "Pull request merged, skipping review"}
+        full_repo = data["repository"]["full_name"]
         repo_name = full_repo.split("/")[-1] # Parse repo name for custom filter search
         diff_url = data["pull_request"]["diff_url"]
         issue_url = data["pull_request"]["issue_url"]

@@ -11,3 +11,5 @@ pyvenv.cfg
 embedded_hashes.json
 chunk_s3.json
 app/script-tools/
+
+deploy-lambda.sh
