@@ -13,3 +13,5 @@ chunk_s3.json
 app/script-tools/
 
 deploy-lambda.sh
+
+/testing/

@@ -26,7 +26,7 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
         return {"message": "Ping received!"}
     elif request.headers.get("X-GitHub-Event") == "pull_request":
         data = await request.json()
-        if data["merged"] == True:
+        if data["action"] != "opened":
             logger.info("[/review] Pull request merged, skipping review")
             return {"message": "Pull request merged, skipping review"}
         full_repo = data["repository"]["full_name"]

@@ -22,9 +22,9 @@ An AI-powered code review bot that automatically analyzes pull requests using Op
 - **Python 3.13**
 - **FastAPI**
 - **Docker**
-- **OpenAI API**
-- **GitHub Webhooks & REST API**
-- **AWS EC2 & S3**
+- **OpenAI API (Chat Completions)**
+- **GitHub Webhooks & GitHub REST API**
+- **AWS Lambda & S3**
 - **PineconeDB**
 
 ---
