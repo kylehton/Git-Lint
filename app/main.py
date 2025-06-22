@@ -1,4 +1,4 @@
-from logic_functions.diff_functions import process_review
+from app.agent_workflow.run_agent import run_orchestration_agent
 from fastapi import FastAPI, Request, BackgroundTasks
 from mangum import Mangum
 import asyncio
@@ -35,7 +35,7 @@ async def webhook(request: Request, background_tasks: BackgroundTasks):
         issue_url = data["pull_request"]["issue_url"]
         
         # Call function chain to process diff and generate a review comment
-        background_tasks.add_task(process_review, repo_name, diff_url, issue_url)
+        background_tasks.add_task(run_orchestration_agent, diff_url, repo_name, issue_url)
         print("[/review] Responding immediately")
         
         # Return response to GitHub to confirm receiving Pull Request webhook
