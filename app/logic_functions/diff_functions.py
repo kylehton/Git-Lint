@@ -132,7 +132,7 @@ def extract_file_paths_from_diff(diff: str) -> list[str]:
     
     return list(paths)
 
-
+# Function to split file for parallel processing reviews
 def split_diff_by_file(diff_text: str) -> dict[str, str]:
     """
     Splits a diff string into a dictionary where keys are file paths
