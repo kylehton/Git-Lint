@@ -28,79 +28,20 @@ index = pc.Index("git-lint")
 # Global variable to store the chunk store
 chunk_store = None
 
-systemPrompt = """
-    The input is the raw diff of a pull request. You are a meticulous code reviewer with deep expertise in algorithms, 
-    data structures, and software engineering best practices.
-    IMPORTANT: Please keep all text, analysis and comments, non-verbose, making sure to be concise and to the point, 
-    especially for non-impactful changes in the diff.
-    Your job:
-        Identify every single change, no matter how small (e.g., comment removal, spacing, refactoring).
-        Some lines are going to be low impact changes, such as spacing, formatting, comment removal, etc.
-        These should NOT be analyzed heavily, and only briefly mentioned at the bottom of the review, before the summary.
-        Impactful changes are: changes to logic and functionality, adding or removing features, and those types of changes
-        that have a significant impact on the codebase and how it functions.
-        For each impactful changed line, analyze and explain, consolidating analysis where you can, and only mentioning the most 
-        impactful changes:
-            - What was changed.
-            - Why it was changed (or likely changed).
-            - Whether the change improves or worsens the code.
-            - If further improvements or abstractions can be made (e.g., avoid repetition, wasted memory, lack of modularity).
-            - If no code change is necessary, but improvements are possible (e.g., abstraction opportunities), suggest those.
-            - Return only the changed lines with explanations — no restating of diffs or unchanged code.
-            - Do not return code in diff format. Use a human-readable explanation paired directly with the changed lines.
-        Your review should help turn the code into the most scalable, efficient, and readable version possible. Assume the 
-        author wants direct, precise, and actionable feedback with no fluff. Do not summarize at the start — only provide a 
-        detailed final summary at the end of the changes.
-    """
 
 ##### FUNCTIONS (are written in order they are called in function pipeline) #####
 
-### CALLED BY: main.py
-### PURPOSE: Handles function chain to process a pull request diff and generate a review comment
-# 1. Retrieve the diff from the redirect URL
-# 2. Review the diff and create a comment
-# 3. Post the comment to the issue
-# @param repo_name: str - The name of the repository
-# @param diff_url: str - The URL of the diff
-# @param issue_url: str - The URL of the issue
-# @return: None
-async def process_review(repo_name: str, diff_url: str, issue_url: str):
-    try:
-        print("[PROCESS]: Downloading chunk store from S3")
+### CALLED BY: run_orchestration_agent
+### PURPOSE: Gets S3 chunks of codebase to be used, which sets the global variable correctly
+def initialize_chunk_store():
+    """Initializes the global chunk_store by downloading it from S3."""
+    global chunk_store
+    print("[PROCESS]: Downloading chunk store from S3")
+    store_path = download_chunk_store_from_s3()
+    chunk_store = load_chunk_store(store_path)
+    print("[PROCESS]: Chunk store initialized")
 
-        global chunk_store
-        # 0. Download the chunk store from S3
-        store_path = download_chunk_store_from_s3()
-        chunk_store = load_chunk_store(store_path)
-
-        print("[PROCESS]: Retrieving diff from redirect URL")
-        # 1. Retrieve the diff from the redirect URL
-        diff = await get_diff(diff_url)
-        if isinstance(diff, dict) and diff.get("error"):
-            print(f"Error getting diff: {diff['error']}")
-            return
-
-        print("[PROCESS]: Reviewing diff and creating comment")
-        # 2. Review the diff and create a comment
-        review = await review_diff(repo_name, diff)
-        if isinstance(review, dict) and review.get("error"):
-            print(f"Error reviewing diff: {review['error']}")
-            return
-
-        print("[PROCESS]: Posting comment")
-        # 3. Post the comment to the issue
-        response = await post_comment(issue_url, review)
-        print(f"Comment response: {response}")
-
-        # 4. Update embeddings for modified files
-        if response.get("message") == "Comment posted successfully":
-            print("[PROCESS]: Updating embeddings for modified files")
-            await update_file_embeddings(repo_name, diff)
-            print("[PROCESS]: Successfully updated embeddings")
-    except Exception as e:
-        print(f"[ERROR]: {e}")
-
-### CALLED BY: process_review
+### CALLED BY: run_orchestration_agent
 ### PURPOSE: Retrieves the diff from the redirect URL to be used as the input for the review
 # 1. Retrieve the diff from the redirect URL
 # 2. Return the diff in text/string format
@@ -115,39 +56,9 @@ async def get_diff(url: str) -> str:
             return response.text
         else:
             return {"error": "Failed to get pull request diff"}
-
-
-### CALLED BY: process_review
-### PURPOSE: Calls gpt-4o-mini to generate a code review comment based on the prompt, diff, and the codebase context
-# 1. Retrieve the context from the diff
-# 2. Call gpt-4o-mini to generate a code review comment
-# 3. Return the code review comment
-# @param repo_name: str - The name of the repository to be searched for context
-# @param diff: str - The diff of the pull request
-# @return: str - code review comment generated by LLM
-async def review_diff(repo_name: str, diff: str) -> str:
-    try:
-        # 1. Retrieve the context from the diff
-        context = await retrieve_context_from_diff(repo_name, diff)
-        print(f"Context: {context}")
-
-        # 2. Call gpt-4o-mini to generate a code review comment
-        prompt = f"{systemPrompt}\n\nContext from codebase:\n{context}\n\nDiff:\n{diff}"
-        response = openAIClient.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": diff}
-            ]
-        )
-        # 3. Return the code review comment
-        return response.choices[0].message.content
-    except Exception as e:
-        print(f"Error occurred during processing of message: {e}")
-        return {"error": str(e)}
     
 
-### CALLED BY: review_diff
+### CALLED BY: review_agent
 ### PURPOSE: Retrieves the context from the diff by searching the vector database for the most relevant chunks
 # 1. Retrieve the file paths from the diff
 # 2. Embed sizable chunks of the diff from chunk_diff()
@@ -157,12 +68,11 @@ async def review_diff(repo_name: str, diff: str) -> str:
 # @param diff: str - The diff of the pull request
 # @param top_k: int - The number of chunks to concatenate and return
 # @return: str - concatenated string of context from the codebase
-async def retrieve_context_from_diff(repo_name: str, diff: str, top_k: int = 3) -> str:
+async def retrieve_context_from_diff(repo_name: str, diff: str, top_k: int = 2) -> str:
     try:
         global chunk_store
         # 1. Retrieve the file paths from the diff
         file_paths = extract_file_paths_from_diff(diff)
-
 
         # 2. Embed sizable chunks of the diff from chunk_diff()
         chunks = chunk_diff(diff)
@@ -196,7 +106,7 @@ async def retrieve_context_from_diff(repo_name: str, diff: str, top_k: int = 3) 
                 else:
                     logger.warning(f"⚠️ Chunk ID {chunk_id} not found in chunk store")
 
-        return "\n\n".join(all_matches[:3])
+        return "\n\n".join(all_matches)
     
     except Exception as e:
         print(f"Error occurred during retrieval of context from diff: {e}")
@@ -223,6 +133,33 @@ def extract_file_paths_from_diff(diff: str) -> list[str]:
     return list(paths)
 
 
+def split_diff_by_file(diff_text: str) -> dict[str, str]:
+    """
+    Splits a diff string into a dictionary where keys are file paths
+    and values are the diff content for each file.
+    """
+    files_diff = {}
+    # Split the diff by the file delimiter 'diff --git'
+    diff_parts = diff_text.split('diff --git ')[1:]
+    
+    for part in diff_parts:
+        # The first line contains the file paths
+        lines = part.split('\n')
+        header_line = lines[0]
+        
+        # Extract the 'b' path as the identifier
+        try:
+            file_path = header_line.split(' b/')[1].strip()
+        except IndexError:
+            # Handle cases where the split doesn't work as expected
+            continue
+            
+        # Reconstruct the diff for this file
+        file_diff_content = 'diff --git ' + part
+        files_diff[file_path] = file_diff_content
+        
+    return files_diff
+
 
 ### CALLED BY: retrieve_context_from_diff
 ### PURPOSE: Splits the entire diff into chunks, which, if longer than min_len, are added to the vector database
@@ -244,7 +181,7 @@ def chunk_diff(diff: str, min_len: int = 50) -> list[str]:
     return chunks
 
 
-### CALLED BY: process_review
+### CALLED BY: run_orchestration_agent
 ### PURPOSE: Posts the comment to the issue
 # 1. Post the comment to the issue
 # 2. Return a success message

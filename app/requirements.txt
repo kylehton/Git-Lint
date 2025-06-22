@@ -13,6 +13,7 @@ idna==3.10
 jiter==0.10.0
 mangum>=0.19.0
 openai>=1.79.0
+openai-agents>=0.0.19
 pinecone>=6.0.2
 pinecone-plugin-interface==0.0.7
 pydantic==2.11.4
