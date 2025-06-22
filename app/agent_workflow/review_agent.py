@@ -13,11 +13,10 @@ review_instructions = """
         Some lines are going to be low impact changes, such as spacing, formatting, comment removal, etc.
         These should NOT be analyzed heavily, and only briefly mentioned at the bottom of the review, before the summary.
         Impactful changes are: changes to logic and functionality, adding or removing features, and those types of changes
-        that have a significant impact on the codebase and how it functions.
+        that have a significant impact on the codebase and how it functions. BE CONCISE.
         For each impactful changed line, analyze and explain, consolidating analysis where you can, and only mentioning the most 
         impactful changes:
             - What was changed.
-            - Why it was changed (or likely changed).
             - Whether the change improves or worsens the code.
             - If further improvements or abstractions can be made (e.g., avoid repetition, wasted memory, lack of modularity).
             - If no code change is necessary, but improvements are possible (e.g., abstraction opportunities), suggest those.
@@ -37,17 +36,17 @@ review_agent = Agent(
 async def run_review_agent(file_path: str, diff_content: str, context: str):
     prompt = f"""Here is a diff for the file `{file_path}`:
 
-    ```diff
-    {diff_content}
-    ```
+        ```diff
+        {diff_content}
+        ```
 
-    Here is some additional context from the codebase:
-    ```
-    {context}
-    ```
+        Here is some additional context from the codebase:
+        ```
+        {context}
+        ```
 
-    Please provide your review for this file's changes.
+        Please provide your review for this file's changes.
     """
-    
+
     result = await Runner.run(review_agent, prompt)
     return result.final_output 
