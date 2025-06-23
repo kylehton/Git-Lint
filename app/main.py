@@ -1,4 +1,4 @@
-from app.agent_workflow.run_agent import run_orchestration_agent
+from agent_workflow.run_agent import run_orchestration_agent
 from fastapi import FastAPI, Request, BackgroundTasks
 from mangum import Mangum
 import asyncio
