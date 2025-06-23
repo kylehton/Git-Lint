@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 import asyncio
 
 from logic_functions.diff_functions import get_diff, split_diff_by_file, retrieve_context_from_diff, post_comment, update_file_embeddings, initialize_chunk_store
-from app.agent_workflow.review_agent import run_review_agent
+from agent_workflow.review_agent import run_review_agent
 
 load_dotenv()
 
@@ -19,7 +19,7 @@ async def run_orchestration_agent(url: str, repo_name: str, issue_url: str):
     initialize_chunk_store()
 
     # 1. Get the full diff
-    print("[PROCESS: Retrieving merged diff...")
+    print("[PROCESS]: Retrieving merged diff...")
     diff = await get_diff(url)
     if isinstance(diff, dict) and diff.get("error"):
         print(f"[ERROR]: Error getting diff: {diff['error']}")
@@ -36,7 +36,7 @@ async def run_orchestration_agent(url: str, repo_name: str, issue_url: str):
         async def review_task(path=file_path, diff_content=file_diff):
             context = await retrieve_context_from_diff(repo_name, diff_content)
             review = await run_review_agent(path, diff_content, context)
-            return f"[CREATION] Review for `{path}`:\n\n{review}"
+            return f"[CREATION] Review for `{path}`:\n{review}"
         
         review_tasks.append(review_task())
 
