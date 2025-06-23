@@ -132,7 +132,9 @@ def upsert_to_pinecone(chunks, index):
 if __name__ == "__main__":
     # Enter manual local paths to repos here
     paths_to_repos = [
-        "/Users/kht/repos/------------"
+        "/Users/kht/repos/MatchPointAI",
+        "/Users/kht/repos/StockSense",
+        "/Users/kht/repos/portfolio"
     ]
 
     all_chunks = []

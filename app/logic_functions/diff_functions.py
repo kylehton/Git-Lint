@@ -9,6 +9,7 @@ import httpx
 import logging
 import re
 import boto3
+import json
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -218,7 +219,7 @@ async def get_file_content(repo_name: str, file_path: str) -> str:
 
 async def update_file_embeddings(repo_name: str, diff: str):
     global chunk_store
-    
+
     try:
         # Get modified file paths from diff
         file_paths = extract_file_paths_from_diff(diff)
@@ -237,32 +238,27 @@ async def update_file_embeddings(repo_name: str, diff: str):
                 logger.warning(f"Could not get content for {file_path}")
                 continue
 
-            # Delete existing chunks for this file
-            chunks_to_delete = []
-            for chunk_id, chunk_data in chunk_store.items():
-                if chunk_data.get("path") == file_path:
-                    chunks_to_delete.append(chunk_id)
-            
+            # Find and delete existing chunks for this file
+            chunks_to_delete = [chunk_id for chunk_id, chunk_data in chunk_store.items() if chunk_data.get("path") == file_path]
             if chunks_to_delete:
                 try:
                     # Delete from Pinecone
                     index.delete(ids=chunks_to_delete)
-                    # Remove from store
+                    print(f"Deleted {len(chunks_to_delete)} chunks from Pinecone for {file_path}: {chunks_to_delete}")
+                    # Remove from local chunk store
                     for chunk_id in chunks_to_delete:
                         chunk_store.pop(chunk_id, None)
-                    print(f"Deleted {len(chunks_to_delete)} chunks for {file_path}")
+                    print(f"Deleted {len(chunks_to_delete)} chunks from chunk_store for {file_path}")
                 except Exception as e:
                     print(f"Error deleting chunks for {file_path}: {e}")
 
-            # Create chunks from file content
+            # Create new chunks from file content
             chunks = []
-            # Use the same chunking patterns as in embeddings.py
             patterns = {
                 ".py": r"(?=def |class )",
                 ".js": r"(?=function |class |const |let |var )",
                 ".java": r"(?=public |private |protected |class )",
             }
-            
             ext = os.path.splitext(file_path)[1]
             if ext in patterns:
                 split_chunks = re.split(patterns[ext], content)
@@ -270,12 +266,12 @@ async def update_file_embeddings(repo_name: str, diff: str):
                     cleaned = chunk.strip()
                     if len(cleaned) > 50:
                         content_hash = hash_content(cleaned)
-                        # Use relative path for both id and metadata
+                        chunk_id = f"{file_path}-{i}-{content_hash}"
                         chunks.append({
-                            "id": f"{file_path}-{i}-{content_hash}",  # Use relative path
+                            "id": chunk_id,
                             "text": cleaned,
                             "metadata": {
-                                "path": file_path,  # Use relative path
+                                "path": file_path,
                                 "chunk_id": i,
                                 "hash": content_hash,
                                 "repo": repo_name,
@@ -287,7 +283,7 @@ async def update_file_embeddings(repo_name: str, diff: str):
                 logger.warning(f"No chunks created for {file_path}")
                 continue
 
-            # Embed the chunks
+            # Embed and upsert new chunks
             embedded_chunks = []
             for chunk in chunks:
                 try:
@@ -298,7 +294,6 @@ async def update_file_embeddings(repo_name: str, diff: str):
                     chunk["embedding"] = response.data[0].embedding
                     embedded_chunks.append(chunk)
                     print(f"Embedded: {chunk['metadata']['path']} [chunk {chunk['metadata']['chunk_id']}]")
-                    print(f"Hash: {chunk['metadata']['hash']}")
                 except Exception as e:
                     print(f"Error embedding chunk {chunk['id']}: {e}")
                     continue
@@ -307,17 +302,15 @@ async def update_file_embeddings(repo_name: str, diff: str):
                 logger.warning(f"No chunks were successfully embedded for {file_path}")
                 continue
 
-            # Update Pinecone using the imported function
+            # Upsert to Pinecone
             try:
                 upsert_to_pinecone(embedded_chunks, index)
+                print(f"Upserted {len(embedded_chunks)} chunks to Pinecone for {file_path}")
             except Exception as e:
                 print(f"Error upserting to Pinecone: {e}")
                 continue
-            
-            # Add to our list of all embedded chunks
-            all_embedded_chunks.extend(embedded_chunks)
-            
-            # Update local store with consistent paths
+
+            # Add to local chunk store
             for chunk in embedded_chunks:
                 try:
                     chunk_store[chunk["id"]] = {
@@ -329,15 +322,19 @@ async def update_file_embeddings(repo_name: str, diff: str):
                     print(f"Error updating store for chunk {chunk['id']}: {e}")
                     continue
 
-        # Save updated store using the same format as embeddings.py
+            all_embedded_chunks.extend(embedded_chunks)
+
+        # Save updated store and upload to S3
         try:
-            save_chunk_store_locally(all_embedded_chunks)
+            # Save the entire chunk_store to S3
+            with open("/tmp/chunk_s3.json", "w") as f:
+                json.dump(chunk_store, f, indent=2)
             upload_chunk_store_to_s3()
             print(f"Successfully updated embeddings for {len(file_paths)} files")
         except Exception as e:
             print(f"Error saving store: {e}")
             raise
-        
+
     except Exception as e:
         print(f"Error updating file embeddings: {e}")
         raise
